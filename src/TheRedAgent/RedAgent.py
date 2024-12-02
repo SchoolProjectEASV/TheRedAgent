@@ -3,38 +3,8 @@ import logging
 import time
 from VectorStore import VectorStoreComponent
 import ollama
-from alpha_vantage.timeseries import TimeSeries
-
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-API_KEY = "N3J457GUET9DGQK2"
-
-def get_top_stock_gainers():
-    """Fetch the top 5 stock gainers based on percentage change."""
-    try:
-        ts = TimeSeries(key=API_KEY, output_format='pandas')
-        
-        stocks = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "META", "NVDA", "BRK.B", "JPM", "V"]
-        gainers = []
-
-        for stock in stocks:
-            data, meta_data = ts.get_daily(symbol=stock, outputsize='compact')
-            latest_close = data['4. close'].iloc[0]
-            previous_close = data['4. close'].iloc[1]
-            percent_change = ((latest_close - previous_close) / previous_close) * 100
-            gainers.append({
-                "symbol": stock,
-                "latest_close": latest_close,
-                "percent_change": percent_change
-            })
-
-        top_gainers = sorted(gainers, key=lambda x: x["percent_change"], reverse=True)[:5]
-        return top_gainers
-
-    except Exception as e:
-        logging.error(f"Error fetching stock gainers: {str(e)}")
-        return [{"error": "Unable to fetch stock gainers at this time."}]
 
 if 'vector_store' not in st.session_state:
     st.session_state.vector_store = VectorStoreComponent(collection_name="PDFAbout")
