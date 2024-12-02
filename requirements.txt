@@ -1,0 +1,9 @@
+qdrant_client
+ollama
+logging
+pdfplumber
+llama_index
+pathlib
+streamlit
+requests
+llama_index
