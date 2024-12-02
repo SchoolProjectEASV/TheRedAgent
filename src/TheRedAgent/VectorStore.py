@@ -53,13 +53,12 @@ class VectorStoreComponent:
         self.embedding_client = ollama.Client(host=self.embedding_model_host)
 
         sample_embedding = self.embedding_client.embeddings(model="llama3.2", prompt="test")["embedding"]
-        self.vector_size = len(sample_embedding)  # Dynamically determine vector size
+        self.vector_size = len(sample_embedding)
         print(f"Detected embedding size: {self.vector_size}")
 
         self.client = QdrantClient(path=str(Path("../../data").absolute()))
         self._initialize_collection()
 
-        # Initialize QdrantVectorStore
         self.vector_store = QdrantVectorStore(
             client=self.client,
             collection_name=self.collection_name,
@@ -83,23 +82,18 @@ class VectorStoreComponent:
 
     def add_text(self, text: str, doc_id: int = None):
         """Adds text to the vector store after generating embeddings, avoiding duplicates."""
-        # Generate a hash for the text
         text_hash = hashlib.md5(text.encode()).hexdigest()
 
-        # Check if the hash already exists in the vector store
         existing_docs = self.list_all_documents()
         if any(doc["hash"] == text_hash for doc in existing_docs):
             logger.info(f"Text already exists in vector store (hash: {text_hash}). Skipping embedding.")
             return
 
-        # Generate embeddings for the new text
         response = self.embedding_client.embeddings(model="llama3.2", prompt=text)
         embeddings = response["embedding"]
 
-        # Use the hash as the document ID if not explicitly provided
-        doc_id = doc_id or int(text_hash, 16) % (10**9)  # Shorten hash to fit Qdrant ID constraints
+        doc_id = doc_id or int(text_hash, 16) % (10**9)
 
-        # Add the text and hash to the vector store
         self.client.upsert(
             collection_name=self.collection_name,
             points=[
@@ -111,11 +105,9 @@ class VectorStoreComponent:
 
     def retrieve_relevant(self, query: str, limit: int = 5):
         """Retrieves relevant chunks from the vector store."""
-        # Generate embedding for the query
         response = self.embedding_client.embeddings(model="llama3.2", prompt=query)
         query_vector = response["embedding"]
 
-        # Perform search in the vector store
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=query_vector,
@@ -140,7 +132,7 @@ class VectorStoreComponent:
 
     def list_all_documents(self):
         """List all documents stored in the vector database."""
-        points, _ = self.client.scroll(self.collection_name)  # Unpack the tuple
+        points, _ = self.client.scroll(self.collection_name)
         return [{"text": point.payload["text"], "hash": point.payload.get("hash")} for point in points]
 
 
@@ -176,7 +168,6 @@ if __name__ == "__main__":
     print("All Documents in the Vector Store:")
     print(all_docs)
 
-    # Close the connection
     vector_store_component.close()
 
     
