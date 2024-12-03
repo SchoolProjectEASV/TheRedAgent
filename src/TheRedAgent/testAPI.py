@@ -1,6 +1,5 @@
 from api_factory import get_api_wrapper
 
-# Skift mellem mock og real API ved at ændre `use_mock`
 # api = get_api_wrapper(use_mock=True)  # Mock
 api = get_api_wrapper(use_mock=False, api_key="random")  # Real API
 
