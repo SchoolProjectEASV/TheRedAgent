@@ -1,7 +1,8 @@
-from FinAPIWrapper import FinancialModelingPrepAPI
+from api_factory import get_api_wrapper
 
-# Replace before push
-api = FinancialModelingPrepAPI(api_key="Random")
+# Skift mellem mock og real API ved at ændre `use_mock`
+# api = get_api_wrapper(use_mock=True)  # Mock
+api = get_api_wrapper(use_mock=False, api_key="random")  # Real API
 
 '''
 query = "Apple"
@@ -10,12 +11,13 @@ if result:
     print("Search Results:", result)
 else:
     print("No results or an error occurred.")
-
 '''
 
 top_gainers = api.get_top_gainers()
 if top_gainers:
     for i, gainer in enumerate(top_gainers, 1):
-        print(f"{i}. {gainer['name']}: {gainer['changesPercentage']}%")
+        ticker = gainer.get("name", "Unknown Name")
+        change = gainer.get("changesPercentage", "Unknown Change")
+        print(f"{i}. {ticker}: {change}%")
 else:
     print("No data found or an error occurred.")
