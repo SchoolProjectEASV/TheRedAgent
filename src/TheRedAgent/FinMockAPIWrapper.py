@@ -15,11 +15,11 @@ class FinMockAPIWrapper:
 
     def get_top_gainers(self, limit=5):
         mock_data = [
-            {"name": "MOCK1", "changesPercentage": "+5.0"},
-            {"name": "MOCK2", "changesPercentage": "+4.5"},
-            {"name": "MOCK3", "changesPercentage": "+7.6"},
-            {"name": "MOCK4", "changesPercentage": "+3.2"},
-            {"name": "MOCK5", "changesPercentage": "+4.1"},
+            {"name": "META", "changesPercentage": "+5.0"},
+            {"name": "AMAZON", "changesPercentage": "+4.5"},
+            {"name": "NVDIA", "changesPercentage": "+7.6"},
+            {"name": "MAERSK", "changesPercentage": "+3.2"},
+            {"name": "STEAM", "changesPercentage": "+4.1"},
         ]
     
         sorted_data = sorted(
