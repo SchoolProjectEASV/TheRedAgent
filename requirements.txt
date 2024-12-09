@@ -4,10 +4,10 @@ logging
 pdfplumber
 llama_index
 pathlib
-streamlit
 requests
 llama_index
 llama_index.vector_stores.qdrant
 autogen
 fix-busted-json
 asyncio
+panel
