@@ -19,7 +19,7 @@ initiate_chat_task_created = False
 
 config_list = [
     {
-        "model": "llama3.1:latest",
+        "model": "mistral",
         "api_type": "ollama",
         "client_host": "http://localhost:11434/",
     }
@@ -42,30 +42,15 @@ def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
     return gainers
 
 def get_vector_context_tool(query: str) -> str:
-    """Retrieve relevant context from the vector store for the given query."""
+    """Retrieve relevant financial trading context from the vector store for the given query."""
     limit = 5
     results = pn.state.cache["vector_store"].retrieve_relevant(query=query, limit=limit)
     context_text = "\n".join(r["text"] for r in results if r["score"] != 0.0)
     if not context_text.strip():
-        context_text = "No relevant information found."
+        context_text = "No relevant financial trading information found."
     return context_text
 
 
-SYSTEM_MESSAGE_TEMPLATE_PLANNER = """You are the planner.
-You have these tools available via the assistant:
-1. VectorContext(query:str) -> returns relevant context from the vector store.
-2. TopGainers(limit:int=5) -> returns the top stock gainers.
-
-Rules:
-- If the user wants stock gainers and also wants advice from the context, instruct the assistant to:
-  1. Call the VectorContext tool first to get relevant advice context.
-  2. Call the TopGainers tool once to get stock gainers.
-  3. Combine both results into a final answer and terminate.
-- If the user only wants context-based advice (no stock gainers), instruct the assistant to call VectorContext and then finalize.
-- If the user only wants stock gainers without context, instruct the assistant to call TopGainers once and finalize.
-- Do not repeat the same instruction multiple times. Once you have given a sequence of instructions, do not give new or repeated instructions.
-- If the assistant doesn't follow correctly, do not cause loops. Either wait or finalize by saying "No further actions needed."
-"""
 
 SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a knowledgeable AI assistant specializing in finance.
 You have two tools available:
@@ -73,12 +58,11 @@ You have two tools available:
 - TopGainers(limit:int=5) -> returns a list of top gaining stocks.
 
 Rules:
-- Follow the planner's instructions exactly.
 - If instructed to call VectorContext, do so exactly once per request and store the result.
 - If instructed to call TopGainers, do so exactly once per request and store the result.
+- You are not able to call the tools yourself, call the tool agent when trying to call the tools.
 - After obtaining the required tool results, combine them into a final answer. If you have context and gainers, integrate them together into helpful advice.
 - Always end your final message with 'TERMINATE'.
-- If the planner asks for repeated actions already done, simply state you've done it and finalize with 'TERMINATE'.
 - Do not loop or wait indefinitely. Execute instructions once and finalize.
 """
 
@@ -89,7 +73,8 @@ If asked again for a completed request, state that it has been done and you cann
 """
 
 SYSTEM_MESSAGE_TEMPLATE_USER = """You are the human user.
-Provide a query and wait for a response. Once you receive a final answer ending with 'TERMINATE', consider the conversation complete.
+Provide a query and wait for a response from the assistant.
+Once you receive a final answer ending with 'TERMINATE', consider the conversation complete.
 """
 
 user_proxy = autogen.UserProxyAgent(
@@ -104,11 +89,11 @@ user_proxy = autogen.UserProxyAgent(
     is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
 )
 
-planner = TrackableAssistantAgent(
-    name="planner",
-    llm_config=llm_config,
-    system_message=SYSTEM_MESSAGE_TEMPLATE_PLANNER,
-)
+# planner = TrackableAssistantAgent(
+#     name="planner",
+#     llm_config=llm_config,
+#     system_message=SYSTEM_MESSAGE_TEMPLATE_PLANNER,
+# )
 
 assistant = TrackableAssistantAgent(
     name="assistant",
@@ -132,18 +117,20 @@ register_function(
     description="Gets the top gaining stocks from the market."
 )
 
+
 register_function(
     get_vector_context_tool,
     caller=assistant,
     executor=tool_agent,
     name="VectorContext",
-    description="Retrieves relevant context from the vector store based on the query."
+    description="Retrieves relevant financial trading context from the vector store based on the query."
 )
 
+
 groupchat = autogen.GroupChat(
-    agents=[user_proxy, planner, assistant, tool_agent], 
+    agents=[user_proxy, assistant, tool_agent], 
     messages=[], 
-    max_round=20
+    max_round=8
 )
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
@@ -171,7 +158,7 @@ def print_messages(recipient, messages, sender, config):
     )
     return False, None
 
-for ag in [user_proxy, planner, assistant, tool_agent]:
+for ag in [user_proxy, assistant, tool_agent]:
     ag.register_reply(
         [autogen.Agent, None],
         reply_func=print_messages,
