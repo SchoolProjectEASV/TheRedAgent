@@ -1,8 +1,8 @@
 from FinAPIWrapper import FinancialModelingPrepAPI
 from FinMockAPIWrapper import FinMockAPIWrapper
 
-class APIFactory:
 
+class APIFactory:
     def get_api_wrapper(use_mock=False, api_key=None):
         """
         Factory function to return the appropriate API wrapper.

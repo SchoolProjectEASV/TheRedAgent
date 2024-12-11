@@ -6,6 +6,10 @@ from typing import List, Dict
 from VectorStore import VectorStoreComponent
 from Agents import TrackableAssistantAgent
 from FinAPIWrapper import FinancialModelingPrepAPI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -19,9 +23,9 @@ initiate_chat_task_created = False
 
 config_list = [
     {
-        "model": "mistral",
-        "api_type": "ollama",
-        "client_host": "http://localhost:11434/",
+        "model": os.getenv("MODEL"),
+        "api_type": os.getenv("API_TYPE"),
+        "client_host": os.getenv("CLIENT_HOST"),
     }
 ]
 
@@ -33,13 +37,12 @@ llm_config = {
 
 
 def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
-    api_instance = FinancialModelingPrepAPI(
-        api_key="PROVIDEAPIKEYHERE".strip()
-    )
+    api_instance = FinancialModelingPrepAPI(api_key=os.getenv("API_FINANCIAL_KEY").strip())
     gainers = api_instance.get_top_gainers(limit=limit)
     if not gainers:
         return []
     return gainers
+
 
 def get_vector_context_tool(query: str) -> str:
     """Retrieve relevant financial trading context from the vector store for the given query."""
@@ -49,7 +52,6 @@ def get_vector_context_tool(query: str) -> str:
     if not context_text.strip():
         context_text = "No relevant financial trading information found."
     return context_text
-
 
 
 SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a knowledgeable AI assistant specializing in finance.
@@ -83,7 +85,7 @@ user_proxy = autogen.UserProxyAgent(
     code_execution_config={
         "last_n_messages": 2,
         "work_dir": "groupchat",
-        "use_docker": False
+        "use_docker": False,
     },
     human_input_mode="ALWAYS",
     is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
@@ -114,7 +116,7 @@ register_function(
     caller=assistant,
     executor=tool_agent,
     name="TopGainers",
-    description="Gets the top gaining stocks from the market."
+    description="Gets the top gaining stocks from the market.",
 )
 
 
@@ -123,14 +125,12 @@ register_function(
     caller=assistant,
     executor=tool_agent,
     name="VectorContext",
-    description="Retrieves relevant financial trading context from the vector store based on the query."
+    description="Retrieves relevant financial trading context from the vector store based on the query.",
 )
 
 
 groupchat = autogen.GroupChat(
-    agents=[user_proxy, assistant, tool_agent], 
-    messages=[], 
-    max_round=8
+    agents=[user_proxy, assistant, tool_agent], messages=[], max_round=8
 )
 manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
@@ -145,6 +145,7 @@ avatar = {
     "System": "💻",
 }
 
+
 def print_messages(recipient, messages, sender, config):
     msg = messages[-1]
     message_user = msg.get("name", msg.get("role", "System"))
@@ -158,12 +159,14 @@ def print_messages(recipient, messages, sender, config):
     )
     return False, None
 
+
 for ag in [user_proxy, assistant, tool_agent]:
     ag.register_reply(
         [autogen.Agent, None],
         reply_func=print_messages,
         config={"callback": None},
     )
+
 
 def callback(contents: str, user: str, instance: pn.chat.ChatInterface):
     global initiate_chat_task_created, conversation_terminated
@@ -176,7 +179,10 @@ def callback(contents: str, user: str, instance: pn.chat.ChatInterface):
         initiate_chat_task_created = True
         user_proxy.initiate_chat(manager, message=contents)
     else:
-        chat_interface.send("Waiting for the conversation to proceed...", user="System", respond=False)
+        chat_interface.send(
+            "Waiting for the conversation to proceed...", user="System", respond=False
+        )
+
 
 chat_interface.callback = callback
 chat_interface.servable()

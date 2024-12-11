@@ -10,6 +10,7 @@ import hashlib
 
 logger = logging.getLogger(__name__)
 
+
 class PDFProcessor:
     """Handles reading and chunking of PDF files."""
 
@@ -33,11 +34,11 @@ class PDFProcessor:
         """Split text into smaller chunks."""
         chunks = []
         while len(text) > chunk_size:
-            last_period_index = text[:chunk_size].rfind('.')
+            last_period_index = text[:chunk_size].rfind(".")
             if last_period_index == -1:
                 last_period_index = chunk_size
-            chunks.append(text[:last_period_index + 1])
-            text = text[last_period_index + 1:]
+            chunks.append(text[: last_period_index + 1])
+            text = text[last_period_index + 1 :]
         chunks.append(text)
         logger.info(f"Text split into {len(chunks)} chunks.")
         return chunks
@@ -52,7 +53,9 @@ class VectorStoreComponent:
 
         self.embedding_client = ollama.Client(host=self.embedding_model_host)
 
-        sample_embedding = self.embedding_client.embeddings(model="llama3.2", prompt="test")["embedding"]
+        sample_embedding = self.embedding_client.embeddings(
+            model="llama3.2", prompt="test"
+        )["embedding"]
         self.vector_size = len(sample_embedding)
         print(f"Detected embedding size: {self.vector_size}")
 
@@ -73,9 +76,8 @@ class VectorStoreComponent:
             self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=models.VectorParams(
-                    size=self.vector_size,
-                    distance=models.Distance.COSINE
-                )
+                    size=self.vector_size, distance=models.Distance.COSINE
+                ),
             )
         else:
             logger.info(f"Collection '{self.collection_name}' already exists.")
@@ -86,7 +88,9 @@ class VectorStoreComponent:
 
         existing_docs = self.list_all_documents()
         if any(doc["hash"] == text_hash for doc in existing_docs):
-            logger.info(f"Text already exists in vector store (hash: {text_hash}). Skipping embedding.")
+            logger.info(
+                f"Text already exists in vector store (hash: {text_hash}). Skipping embedding."
+            )
             return
 
         response = self.embedding_client.embeddings(model="llama3.2", prompt=text)
@@ -97,11 +101,16 @@ class VectorStoreComponent:
         self.client.upsert(
             collection_name=self.collection_name,
             points=[
-                models.PointStruct(id=doc_id, vector=embeddings, payload={"text": text, "hash": text_hash}),
+                models.PointStruct(
+                    id=doc_id,
+                    vector=embeddings,
+                    payload={"text": text, "hash": text_hash},
+                ),
             ],
         )
-        logger.info(f"Added document ID {doc_id} with hash {text_hash} to the vector store.")
-
+        logger.info(
+            f"Added document ID {doc_id} with hash {text_hash} to the vector store."
+        )
 
     def retrieve_relevant(self, query: str, limit: int = 5):
         """Retrieves relevant chunks from the vector store."""
@@ -133,8 +142,10 @@ class VectorStoreComponent:
     def list_all_documents(self):
         """List all documents stored in the vector database."""
         points, _ = self.client.scroll(self.collection_name)
-        return [{"text": point.payload["text"], "hash": point.payload.get("hash")} for point in points]
-
+        return [
+            {"text": point.payload["text"], "hash": point.payload.get("hash")}
+            for point in points
+        ]
 
     def close(self):
         """Closes the connection to the vector store."""
@@ -169,5 +180,3 @@ if __name__ == "__main__":
     print(all_docs)
 
     vector_store_component.close()
-
-    
