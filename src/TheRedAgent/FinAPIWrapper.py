@@ -38,3 +38,17 @@ class FinancialModelingPrepAPI:
         except requests.exceptions.RequestException as e:
             print(f"An error occurred: {e}")
             return None
+        
+    def get_top_losers(self, limit=5):
+
+        url = f"{self.BASE_URL}/losers"
+        params = {"apikey": self.api_key}
+
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            losers = response.json()
+            return losers[:limit]  # Return the top losers
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            return None

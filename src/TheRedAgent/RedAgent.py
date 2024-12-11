@@ -38,7 +38,14 @@ llm_config = {
 
 def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
     api_instance = FinancialModelingPrepAPI(api_key=os.getenv("API_FINANCIAL_KEY").strip())
-    gainers = api_instance.get_top_gainers(limit=limit)
+    losers = api_instance.get_top_gainers(limit=limit)
+    if not losers:
+        return []
+    return losers
+
+def get_losers_gainers_tool(limit: int = 5) -> List[Dict]:
+    api_instance = FinancialModelingPrepAPI(api_key=os.getenv("API_FINANCIAL_KEY").strip())
+    gainers = api_instance.get_top_losers(limit=limit)
     if not gainers:
         return []
     return gainers
@@ -55,10 +62,10 @@ def get_vector_context_tool(query: str) -> str:
 
 
 SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a knowledgeable AI assistant specializing in finance.
-You have two tools available:
+You have three tools available:
 - VectorContext(query:str) -> returns relevant context text.
 - TopGainers(limit:int=5) -> returns a list of top gaining stocks.
-
+- TopLosers(limit: int=5) -> returns a list of top losing stocks.
 Rules:
 - If instructed to call VectorContext, do so exactly once per request and store the result.
 - If instructed to call TopGainers, do so exactly once per request and store the result.
@@ -119,6 +126,13 @@ register_function(
     description="Gets the top gaining stocks from the market.",
 )
 
+register_function(
+    get_losers_gainers_tool,
+    caller=assistant,
+    executor=tool_agent,
+    name="TopLosers",
+    description="Gets the top 5 losing stocks from the market.",
+)
 
 register_function(
     get_vector_context_tool,
