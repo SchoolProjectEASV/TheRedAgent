@@ -4,7 +4,7 @@ import autogen
 from autogen import register_function
 from typing import List, Dict
 from VectorStore import VectorStoreComponent
-from Agents import TrackableAssistantAgent
+from Agents import TrackableAssistantAgent, TrackableConversableAgent
 from FinAPIWrapper import FinancialModelingPrepAPI
 import os
 from dotenv import load_dotenv
@@ -37,8 +37,20 @@ llm_config = {
 
 
 def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
-    api_instance = FinancialModelingPrepAPI(api_key=os.getenv("API_FINANCIAL_KEY").strip())
-    gainers = api_instance.get_top_gainers(limit=limit)
+    api_instance = FinancialModelingPrepAPI(
+        api_key=os.getenv("API_FINANCIAL_KEY").strip()
+    )
+    losers = api_instance.get_top_gainers(limit=limit)
+    if not losers:
+        return []
+    return losers
+
+
+def get_losers_gainers_tool(limit: int = 5) -> List[Dict]:
+    api_instance = FinancialModelingPrepAPI(
+        api_key=os.getenv("API_FINANCIAL_KEY").strip()
+    )
+    gainers = api_instance.get_top_losers(limit=limit)
     if not gainers:
         return []
     return gainers
@@ -54,18 +66,22 @@ def get_vector_context_tool(query: str) -> str:
     return context_text
 
 
-SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a knowledgeable AI assistant specializing in finance.
-You have two tools available:
-- VectorContext(query:str) -> returns relevant context text.
-- TopGainers(limit:int=5) -> returns a list of top gaining stocks.
+SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a highly knowledgeable AI assistant specializing in finance.
+You have access to three tools via a tool agent:
 
-Rules:
-- If instructed to call VectorContext, do so exactly once per request and store the result.
-- If instructed to call TopGainers, do so exactly once per request and store the result.
-- You are not able to call the tools yourself, call the tool agent when trying to call the tools.
-- After obtaining the required tool results, combine them into a final answer. If you have context and gainers, integrate them together into helpful advice.
-- Always end your final message with 'TERMINATE'.
-- Do not loop or wait indefinitely. Execute instructions once and finalize.
+VectorContext(query: str) - Retrieves relevant financial context based on a query.
+TopGainers(limit: int = 5) - Provides a list of top gaining stocks.
+TopLosers(limit: int = 5) - Provides a list of top losing stocks.
+
+Rules for Using Tools:
+Delegation: You cannot execute tools directly. Always call the tool agent to execute tools on your behalf.
+Single Use: Call each tool exactly once per request. Avoid multiple or duplicate calls.
+Combination of Results: Integrate results logically into a cohesive response when multiple tools are used. For example:
+If you retrieve context and top gainers, use both to provide a relevant and actionable response.
+Final Response: Always conclude your final message with TERMINATE.
+Interaction Guidelines:
+No Redundancy: If a tool request has already been completed, do not re-request it.
+Execution Only: Avoid loops or indefinite waits. Execute instructions once and finalize.
 """
 
 SYSTEM_MESSAGE_TEMPLATE_TOOL_AGENT = """You are the tool agent.
@@ -91,13 +107,8 @@ user_proxy = autogen.UserProxyAgent(
     is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
 )
 
-# planner = TrackableAssistantAgent(
-#     name="planner",
-#     llm_config=llm_config,
-#     system_message=SYSTEM_MESSAGE_TEMPLATE_PLANNER,
-# )
 
-assistant = TrackableAssistantAgent(
+assistant = TrackableConversableAgent(
     name="assistant",
     llm_config=llm_config,
     system_message=SYSTEM_MESSAGE_TEMPLATE_ASSISTANT,
@@ -119,6 +130,13 @@ register_function(
     description="Gets the top gaining stocks from the market.",
 )
 
+register_function(
+    get_losers_gainers_tool,
+    caller=assistant,
+    executor=tool_agent,
+    name="TopLosers",
+    description="Gets the top 5 losing stocks from the market.",
+)
 
 register_function(
     get_vector_context_tool,
