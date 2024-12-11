@@ -1,106 +1,188 @@
-import streamlit as st
 import logging
-import time
+import panel as pn
+import autogen
+from autogen import register_function
+from typing import List, Dict
 from VectorStore import VectorStoreComponent
-import ollama
+from Agents import TrackableAssistantAgent
+from FinAPIWrapper import FinancialModelingPrepAPI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 
+pn.extension(design="material")
 
-if 'vector_store' not in st.session_state:
-    st.session_state.vector_store = VectorStoreComponent(collection_name="PDFAbout")
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
-    
+if "vector_store" not in pn.state.cache:
+    pn.state.cache["vector_store"] = VectorStoreComponent(collection_name="PDFAbout")
 
-def getTestDataFromAPISTUFFLOL():
-    return "This is a test"
+conversation_terminated = False
+initiate_chat_task_created = False
 
-MODEL = "llama3.1:latest"
+config_list = [
+    {
+        "model": os.getenv("MODEL"),
+        "api_type": os.getenv("API_TYPE"),
+        "client_host": os.getenv("CLIENT_HOST"),
+    }
+]
 
-def query_llama(model, query, context):
-    """Query the Llama model synchronously."""
-    try:
-        messages = [
-            {
-                "role": "system",
-                "content": "You are an AI assistant. Use the provided context to answer questions accurately and concisely."
-            },
-            {
-                "role": "user",
-                "content": f"Context:\n{context}\n\nQuestion: {query}"
-            }
-                
-        ] 
-    
-        tools = [
-            {
-                'type': 'function',
-                'function': {
-                    'name': 'getTestDataFromAPISTUFFLOL',
-                    'description': 'Get test data from API',
-                    'parameters': {
-                        'type': 'object',
-                        'properties': {},
-                        'required': [],
-                    },
-                },
-            }
-        ]
-        
-        
-        response = ollama.chat(model=model, messages=messages)
-        return response.get("message", {}).get("content", "").strip() 
-    except Exception as e:
-        logging.error(f"Error querying Llama: {str(e)}")
-        return "An error occurred while processing your query."
-
-def process_query_with_llama(query: str):
-    """Retrieve relevant chunks from vector store and use Llama to generate a response."""
-    try:
-        results = st.session_state.vector_store.retrieve_relevant(query=query, limit=5)
-        if not results or all(r['score'] == 0.0 for r in results):
-            return "No relevant information found for your query."
-
-        context = "\n".join(f"{result['text']}" for result in results)
-
-        response_message = query_llama(MODEL, query, context)
-        return response_message
-    except Exception as e:
-        logging.error(f"Error processing query with Llama: {str(e)}")
-        return "An error occurred while processing your query."
+llm_config = {
+    "seed": 42,
+    "config_list": config_list,
+    "temperature": 0,
+}
 
 
-def main():
-    st.title("Financial advisor bot")
-    logging.info("App started")
+def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
+    api_instance = FinancialModelingPrepAPI(api_key=os.getenv("API_FINANCIAL_KEY").strip())
+    gainers = api_instance.get_top_gainers(limit=limit)
+    if not gainers:
+        return []
+    return gainers
 
-    if prompt := st.chat_input("Enter your query here..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        logging.info(f"User input: {prompt}")
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+def get_vector_context_tool(query: str) -> str:
+    """Retrieve relevant financial trading context from the vector store for the given query."""
+    limit = 5
+    results = pn.state.cache["vector_store"].retrieve_relevant(query=query, limit=limit)
+    context_text = "\n".join(r["text"] for r in results if r["score"] != 0.0)
+    if not context_text.strip():
+        context_text = "No relevant financial trading information found."
+    return context_text
 
-        if st.session_state.messages[-1]["role"] != "assistant":
-            with st.chat_message("assistant"):
-                start_time = time.time()
-                logging.info("Processing query with Llama and vector store results")
 
-                with st.spinner("Processing query with Llama..."):
-                    try:
-                        response_message = process_query_with_llama(query=prompt)
-                        duration = time.time() - start_time
-                        response_message_with_duration = f"{response_message}\n\nDuration: {duration:.2f} seconds"
+SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a knowledgeable AI assistant specializing in finance.
+You have two tools available:
+- VectorContext(query:str) -> returns relevant context text.
+- TopGainers(limit:int=5) -> returns a list of top gaining stocks.
 
-                        st.session_state.messages.append({"role": "assistant", "content": response_message_with_duration})
-                        st.write(response_message_with_duration)
-                        logging.info(f"Response: {response_message}, Duration: {duration:.2f} s")
+Rules:
+- If instructed to call VectorContext, do so exactly once per request and store the result.
+- If instructed to call TopGainers, do so exactly once per request and store the result.
+- You are not able to call the tools yourself, call the tool agent when trying to call the tools.
+- After obtaining the required tool results, combine them into a final answer. If you have context and gainers, integrate them together into helpful advice.
+- Always end your final message with 'TERMINATE'.
+- Do not loop or wait indefinitely. Execute instructions once and finalize.
+"""
 
-                    except Exception as e:
-                        st.session_state.messages.append({"role": "assistant", "content": str(e)})
-                        st.error("An error occurred while processing your query.")
-                        logging.error(f"Error: {str(e)}")
+SYSTEM_MESSAGE_TEMPLATE_TOOL_AGENT = """You are the tool agent.
+You execute tools only when asked by the assistant.
+Return results directly to the assistant.
+If asked again for a completed request, state that it has been done and you cannot repeat.
+"""
 
-if __name__ == "__main__":
-    main()
+SYSTEM_MESSAGE_TEMPLATE_USER = """You are the human user.
+Provide a query and wait for a response from the assistant.
+Once you receive a final answer ending with 'TERMINATE', consider the conversation complete.
+"""
+
+user_proxy = autogen.UserProxyAgent(
+    name="User_proxy",
+    system_message=SYSTEM_MESSAGE_TEMPLATE_USER,
+    code_execution_config={
+        "last_n_messages": 2,
+        "work_dir": "groupchat",
+        "use_docker": False,
+    },
+    human_input_mode="ALWAYS",
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+)
+
+# planner = TrackableAssistantAgent(
+#     name="planner",
+#     llm_config=llm_config,
+#     system_message=SYSTEM_MESSAGE_TEMPLATE_PLANNER,
+# )
+
+assistant = TrackableAssistantAgent(
+    name="assistant",
+    llm_config=llm_config,
+    system_message=SYSTEM_MESSAGE_TEMPLATE_ASSISTANT,
+    is_termination_msg=lambda x: x.get("content", "").rstrip().endswith("TERMINATE"),
+)
+
+tool_agent = TrackableAssistantAgent(
+    name="tool_agent",
+    llm_config=llm_config,
+    system_message=SYSTEM_MESSAGE_TEMPLATE_TOOL_AGENT,
+    human_input_mode="NEVER",
+)
+
+register_function(
+    get_top_gainers_tool,
+    caller=assistant,
+    executor=tool_agent,
+    name="TopGainers",
+    description="Gets the top gaining stocks from the market.",
+)
+
+
+register_function(
+    get_vector_context_tool,
+    caller=assistant,
+    executor=tool_agent,
+    name="VectorContext",
+    description="Retrieves relevant financial trading context from the vector store based on the query.",
+)
+
+
+groupchat = autogen.GroupChat(
+    agents=[user_proxy, assistant, tool_agent], messages=[], max_round=8
+)
+manager = autogen.GroupChatManager(groupchat=groupchat, llm_config=llm_config)
+
+chat_interface = pn.chat.ChatInterface()
+chat_interface.send("Send a message!", user="System", respond=False)
+
+avatar = {
+    "assistant": "🤖",
+    "User_proxy": "👨‍💼",
+    "planner": "🗓",
+    "tool_agent": "🛠",
+    "System": "💻",
+}
+
+
+def print_messages(recipient, messages, sender, config):
+    msg = messages[-1]
+    message_user = msg.get("name", msg.get("role", "System"))
+    message_content = msg.get("content", "")
+    user_avatar = avatar.get(message_user, "")
+    chat_interface.send(
+        message_content,
+        user=message_user,
+        avatar=user_avatar,
+        respond=False,
+    )
+    return False, None
+
+
+for ag in [user_proxy, assistant, tool_agent]:
+    ag.register_reply(
+        [autogen.Agent, None],
+        reply_func=print_messages,
+        config={"callback": None},
+    )
+
+
+def callback(contents: str, user: str, instance: pn.chat.ChatInterface):
+    global initiate_chat_task_created, conversation_terminated
+
+    if conversation_terminated:
+        chat_interface.send("The conversation has ended.", user="System", respond=False)
+        return
+
+    if not initiate_chat_task_created:
+        initiate_chat_task_created = True
+        user_proxy.initiate_chat(manager, message=contents)
+    else:
+        chat_interface.send(
+            "Waiting for the conversation to proceed...", user="System", respond=False
+        )
+
+
+chat_interface.callback = callback
+chat_interface.servable()

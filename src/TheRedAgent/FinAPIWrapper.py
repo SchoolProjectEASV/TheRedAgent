@@ -1,15 +1,20 @@
 import requests
+from urllib.parse import urlencode
 
 
 class FinancialModelingPrepAPI:
     BASE_URL = "https://financialmodelingprep.com/api/v3/stock_market"
 
     def __init__(self, api_key: str):
-        self.api_key = api_key
+        self.api_key = api_key.strip()  # Clean up the API key
 
     def search_company(self, query: str):
         url = f"{self.BASE_URL}/search"
         params = {"query": query, "apikey": self.api_key}
+
+        # Log the constructed URL
+        print(f"Constructed URL: {url}?{urlencode(params)}")
+
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -19,10 +24,12 @@ class FinancialModelingPrepAPI:
             return None
 
     def get_top_gainers(self, limit=5):
-        
-        #Fetch the top gainers in the stock market today.
         url = f"{self.BASE_URL}/gainers"
         params = {"apikey": self.api_key}
+
+        # Log the constructed URL
+        print(f"Constructed URL: {url}?{urlencode(params)}")
+
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -31,4 +38,3 @@ class FinancialModelingPrepAPI:
         except requests.exceptions.RequestException as e:
             print(f"An error occurred: {e}")
             return None
-
