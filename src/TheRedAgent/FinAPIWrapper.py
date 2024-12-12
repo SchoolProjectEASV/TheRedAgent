@@ -6,13 +6,12 @@ class FinancialModelingPrepAPI:
     BASE_URL = "https://financialmodelingprep.com/api/v3/stock_market"
 
     def __init__(self, api_key: str):
-        self.api_key = api_key.strip()  # Clean up the API key
+        self.api_key = api_key.strip()
 
     def search_company(self, query: str):
         url = f"{self.BASE_URL}/search"
         params = {"query": query, "apikey": self.api_key}
 
-        # Log the constructed URL
         print(f"Constructed URL: {url}?{urlencode(params)}")
 
         try:
@@ -27,7 +26,6 @@ class FinancialModelingPrepAPI:
         url = f"{self.BASE_URL}/gainers"
         params = {"apikey": self.api_key}
 
-        # Log the constructed URL
         print(f"Constructed URL: {url}?{urlencode(params)}")
 
         try:

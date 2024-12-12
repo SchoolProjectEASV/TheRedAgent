@@ -2,10 +2,9 @@ import logging
 import panel as pn
 import autogen
 from autogen import register_function
-from typing import List, Dict
 from VectorStore import VectorStoreComponent
 from Agents import TrackableAssistantAgent, TrackableConversableAgent
-from FinAPIWrapper import FinancialModelingPrepAPI
+from tools import Tools
 import os
 from dotenv import load_dotenv
 
@@ -36,36 +35,6 @@ llm_config = {
 }
 
 
-def get_top_gainers_tool(limit: int = 5) -> List[Dict]:
-    api_instance = FinancialModelingPrepAPI(
-        api_key=os.getenv("API_FINANCIAL_KEY").strip()
-    )
-    losers = api_instance.get_top_gainers(limit=limit)
-    if not losers:
-        return []
-    return losers
-
-
-def get_losers_gainers_tool(limit: int = 5) -> List[Dict]:
-    api_instance = FinancialModelingPrepAPI(
-        api_key=os.getenv("API_FINANCIAL_KEY").strip()
-    )
-    gainers = api_instance.get_top_losers(limit=limit)
-    if not gainers:
-        return []
-    return gainers
-
-
-def get_vector_context_tool(query: str) -> str:
-    """Retrieve relevant financial trading context from the vector store for the given query."""
-    limit = 5
-    results = pn.state.cache["vector_store"].retrieve_relevant(query=query, limit=limit)
-    context_text = "\n".join(r["text"] for r in results if r["score"] != 0.0)
-    if not context_text.strip():
-        context_text = "No relevant financial trading information found."
-    return context_text
-
-
 SYSTEM_MESSAGE_TEMPLATE_ASSISTANT = """You are a highly knowledgeable AI assistant specializing in finance.
 You have access to three tools via a tool agent:
 
@@ -73,6 +42,7 @@ VectorContext(query: str) - Retrieves relevant financial context based on a quer
 TopGainers(limit: int = 5) - Provides a list of top gaining stocks.
 TopLosers(limit: int = 5) - Provides a list of top losing stocks.
 
+You are not allowed to answer back, before you can see that the tool agent have answered. Do not pretend you are calling the tools, with bogus information.
 Rules for Using Tools:
 Delegation: You cannot execute tools directly. Always call the tool agent to execute tools on your behalf.
 Single Use: Call each tool exactly once per request. Avoid multiple or duplicate calls.
@@ -123,7 +93,7 @@ tool_agent = TrackableAssistantAgent(
 )
 
 register_function(
-    get_top_gainers_tool,
+    Tools.get_top_gainers_tool,
     caller=assistant,
     executor=tool_agent,
     name="TopGainers",
@@ -131,7 +101,7 @@ register_function(
 )
 
 register_function(
-    get_losers_gainers_tool,
+    Tools.get_losers_gainers_tool,
     caller=assistant,
     executor=tool_agent,
     name="TopLosers",
@@ -139,7 +109,7 @@ register_function(
 )
 
 register_function(
-    get_vector_context_tool,
+    Tools.get_vector_context_tool,
     caller=assistant,
     executor=tool_agent,
     name="VectorContext",
@@ -158,7 +128,6 @@ chat_interface.send("Send a message!", user="System", respond=False)
 avatar = {
     "assistant": "🤖",
     "User_proxy": "👨‍💼",
-    "planner": "🗓",
     "tool_agent": "🛠",
     "System": "💻",
 }
