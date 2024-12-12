@@ -81,7 +81,7 @@ panel serve redagent.py
 
 ![image](https://github.com/user-attachments/assets/b330ad24-a5c7-45d4-a2d9-7e134a5135d1)
 
-## Can you provide me with the top 5 losing stocks in the market today, along with any relevant insigts on why they might be underforperming
+## Can you provide me with the top 5 losing stocks in the market today, along with any relevant insigts on why they might be underperforming
 
 ![image](https://github.com/user-attachments/assets/6f69e8dc-c6da-44a5-9bf1-66976bbc1470)
 
