@@ -53,7 +53,7 @@ API_FINANCIAL_KEY="GET THE FMP API KEY FROM https://site.financialmodelingprep.c
 
 Navigate to root folder, then run the following:
 ```
-pip install requirements.txt -r
+pip install -r requirements.txt
 ```
 Then navigate to the src folder, and then TheRedAgent folder
 
